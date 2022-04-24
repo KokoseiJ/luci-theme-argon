@@ -15,7 +15,6 @@
 
 	Licensed to the public under the Apache License 2.0
 -%>
-
 <%
 	local sys = require "luci.sys"
 	local util = require "luci.util"
@@ -54,40 +53,101 @@
 	-- Brand name
 	local brand_name = boardinfo.hostname or "?"
 -%>
+<%
+	local util		= require "luci.util"
+	local fs		= require "nixio.fs"
+	local nutil		= require "nixio.util"
+	local json		= require "luci.jsonc"
+	local sys		= require "luci.sys"
+	local uci		= require 'luci.model.uci'.cursor()
+
+	-- Fetch Local Background Media
+	
+	function glob(...)
+		local iter, code, msg = fs.glob(...)
+		if iter then
+			return nutil.consume(iter)
+		else
+			return nil, code, msg
+		end
+	end
+
+
+	function fetchMedia(path,themeDir)
+		local backgroundTable 	= {}
+		local backgroundCount 	= 0
+		for i, f in ipairs(glob(path)) do
+			attr = fs.stat(f)
+			if attr then
+				local ext = fs.basename(f):match(".+%.(%w+)$")
+				if ext == "jpg" or ext == "png" or ext == "gif" or ext == "mp4" then
+					local bg = {}
+					bg.type = ext
+					bg.url = themeDir .. fs.basename(f)
+					table.insert(backgroundTable,bg)
+					backgroundCount = backgroundCount + 1
+				end
+			end
+		end
+		return backgroundTable,backgroundCount
+	end
+
+	local boardinfo			= util.ubus("system", "board")
+	local bingUrl 			= "http://www.bing.com/"
+	local bingApiUrl 		= bingUrl .. "HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US"
+	local themeDir			= media .. "/background/"
+	local bgUrl 			= media .. "/img/bg1.jpg"
+	local useBing			= fs.access('/etc/config/argon') and "1" or "0"
+	local backgroundTable, backgroundCount 		= fetchMedia("/www" .. themeDir .. "*",themeDir)
+	local backgroundType 	= "Image"
+
+	if ( backgroundCount > 0 ) then
+		local currentBg = backgroundTable[math.random(1,backgroundCount)]
+		bgUrl 			= currentBg.url
+		if (currentBg.type == "mp4" ) then
+			backgroundType 	= "Video"
+		end
+	else
+		local bing = sys.exec("wget --timeout=0.5 -qO- '%s'" %bingApiUrl)
+		if (bing and bing ~= '') then
+			bgUrl 	= bingUrl .. json.parse(bing).images[1].url
+		end
+	end
+%>
 <!DOCTYPE html>
 <html lang="<%=luci.i18n.context.lang%>">
 
 <head>
-    <meta charset="utf-8">
-    <title>
-        <%=striptags( (boardinfo.hostname or "?") .. ( (node and node.title) and ' - ' .. translate(node.title) or '')) %>
-        - LuCI</title>
-    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport" />
-    <meta name="format-detection" content="telephone=no, email=no" />
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="x5-fullscreen" content="true">
-    <meta name="full-screen" content="yes">
-    <meta name="x5-page-mode" content="app">
-    <meta name="browsermode" content="application">
-    <meta name="msapplication-tap-highlight" content="no">
-    <meta name="msapplication-TileColor" content="<%=bar_color%>">
-    <meta name="application-name" content="<%=striptags( (boardinfo.hostname or "?") ) %> - LuCI">
-    <meta name="apple-mobile-web-app-title" content="<%=striptags( (boardinfo.hostname or "?") ) %> - LuCI">
-    <link rel="apple-touch-icon" sizes="60x60" href="<%=media%>/icon/apple-icon-60x60.png">
-    <link rel="apple-touch-icon" sizes="72x72" href="<%=media%>/icon/apple-icon-72x72.png">
-    <link rel="apple-touch-icon" sizes="144x144" href="<%=media%>/icon/apple-icon-144x144.png">
-    <link rel="icon" type="image/png" sizes="192x192" href="<%=media%>/icon/android-icon-192x192.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="<%=media%>/icon/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="96x96" href="<%=media%>/icon/favicon-96x96.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="<%=media%>/icon/favicon-16x16.png">
-    <link rel="manifest" href="<%=media%>/icon/manifest.json"  crossorigin="use-credentials">
-    <meta name="msapplication-TileColor" content="<%=bar_color%>">
-    <meta name="msapplication-TileImage" content="<%=media%>/icon/ms-icon-144x144.png">
-    <meta name="theme-color" content="<%=bar_color%>">
-    <link rel="stylesheet" href="<%=media%>/css/cascade.css?v=<%=math.random(1,100000)%>">
-    <style title="text/css">
-        <% if mode == 'normal' then %>
+  <meta charset="utf-8">
+  <title>
+    <%=striptags( (boardinfo.hostname or "?") .. ( (node and node.title) and ' - ' .. translate(node.title) or '')) %>
+    - LuCI</title>
+  <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport" />
+  <meta name="format-detection" content="telephone=no, email=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="x5-fullscreen" content="true">
+  <meta name="full-screen" content="yes">
+  <meta name="x5-page-mode" content="app">
+  <meta name="browsermode" content="application">
+  <meta name="msapplication-tap-highlight" content="no">
+  <meta name="msapplication-TileColor" content="<%=bar_color%>">
+  <meta name="application-name" content="<%=striptags( (boardinfo.hostname or " ?") ) %> - LuCI">
+  <meta name="apple-mobile-web-app-title" content="<%=striptags( (boardinfo.hostname or " ?") ) %> - LuCI">
+  <link rel="apple-touch-icon" sizes="60x60" href="<%=media%>/icon/apple-icon-60x60.png">
+  <link rel="apple-touch-icon" sizes="72x72" href="<%=media%>/icon/apple-icon-72x72.png">
+  <link rel="apple-touch-icon" sizes="144x144" href="<%=media%>/icon/apple-icon-144x144.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="<%=media%>/icon/android-icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="<%=media%>/icon/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="<%=media%>/icon/favicon-96x96.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="<%=media%>/icon/favicon-16x16.png">
+  <link rel="manifest" href="<%=media%>/icon/manifest.json" crossorigin="use-credentials">
+  <meta name="msapplication-TileColor" content="<%=bar_color%>">
+  <meta name="msapplication-TileImage" content="<%=media%>/icon/ms-icon-144x144.png">
+  <meta name="theme-color" content="<%=bar_color%>">
+  <link rel="stylesheet" href="<%=media%>/css/cascade.css?v=<%=math.random(1,100000)%>">
+  <style title="text/css">
+    <% if mode == 'normal' then %>
             @media (prefers-color-scheme: dark) {
                 <%=dark_css%>
             }
@@ -105,75 +165,103 @@
         }
         <% end -%>
     </style>
-	<link rel="shortcut icon" href="<%=media%>/favicon.ico">
-	<% if node and node.css then %>
-	<link rel="stylesheet" href="<%=resource%>/<%=node.css%>">
-	<% end -%>
-	<% if css then %>
-	<style title="text/css">
-		<%=css %>
+  <link rel="shortcut icon" href="<%=media%>/favicon.ico">
+  <% if node and node.css then %>
+  <link rel="stylesheet" href="<%=resource%>/<%=node.css%>">
+  <% end -%>
+  <% if css then %>
+  <style title="text/css">
+    <%=css %>
 	</style>
-	<% end -%>
-	<script src="<%=media%>/js/polyfill.min.js"></script>
-	<script src="<%=url('admin/translations', luci.i18n.context.lang)%>?v=2.2.4"></script>
-	<script src="<%=resource%>/cbi.js?v=2.2.4"></script>
-	<script src="<%=resource%>/luci.js?v=2.2.4"></script>
-	<script src="<%=media%>/js/jquery.min.js?v=2.2.4"></script>
+  <% end -%>
+  <script src="<%=media%>/js/polyfill.min.js"></script>
+  <script src="<%=url('admin/translations', luci.i18n.context.lang)%>?v=2.2.4"></script>
+  <script src="<%=resource%>/cbi.js?v=2.2.4"></script>
+  <script src="<%=resource%>/luci.js?v=2.2.4"></script>
+  <script src="<%=media%>/js/jquery.min.js?v=2.2.4"></script>
 </head>
 
-<body
-	class="lang_<%=luci.i18n.context.lang%> <% if node then %><%= striptags( node.title ) %><% end %> <% if luci.dispatcher.context.authsession then %>logged-in<% end %>"
-	data-page="<%= table.concat(disp.context.requestpath, "-") %>">
+<body class="lang_<%=luci.i18n.context.lang%> <% if node then %><%= striptags( node.title ) %><% end %> <% if luci.dispatcher.context.authsession then %>logged-in<% end %>" data-page="<%= table.concat(disp.context.requestpath, " -") %>">
+  <div class="main">
+    <% if ( backgroundType == "Video" ) then %>
+    <!-- Video Player Start -->
+    <div class="video">
+      <video autoplay loop muted id="video">
+        <source src="<%=bgUrl%>" type="video/mp4">
+      </video>
+    </div>
+    <div class="volume-control mute"></div>
+    <script>
+    $(".volume-control").click(function() {
+      if ($(this).hasClass("mute")) {
+        $(this).removeClass("mute")
+        $("#video").prop('muted', false);
+      } else {
+        $(this).addClass("mute")
+        $("#video").prop('muted', true);
+      }
+    })
 
-	<div class="main">
-		<div class="main-left" id="mainmenu" style="display:none">
-			<div class="sidenav-header d-flex align-items-center">
-				<a class="brand" href="#"><%=brand_name%></a>
-				<div class="ml-auto">
-					<!-- Sidenav toggler -->
-					<div class="sidenav-toggler d-none d-xl-block active" data-action="sidenav-unpin"
-						data-target="#sidenav-main">
-						<div class="sidenav-toggler-inner">
-							<i class="sidenav-toggler-line"></i>
-							<i class="sidenav-toggler-line"></i>
-							<i class="sidenav-toggler-line"></i>
-						</div>
-					</div>
-				</div>
-			</div>
-		</div>
-		<div class="main-right">
-			<header class="bg-primary">
-				<div class="fill">
-					<div class="container">
-						<div class="flex1">
-							<a class="showSide"></a>
-							<a class="brand" href="#"><%=brand_name%></a>
-						</div>
-						<div class="status" id="indicators"></div>
-					</div>
-				</div>
-			</header>
-			<div class="darkMask"></div>
-			<div id="maincontent">
-				<div class="container">
-					<%- if luci.sys.process.info("uid") == 0 and luci.sys.user.getuser("root") and not luci.sys.user.getpasswd("root") then -%>
-					<div class="alert-message error">
-						<h4><%:No password set!%></h4>
-						<p><%:There is no password set on this router. Please configure a root password to protect the web interface.%>
-						</p>
-						<% if disp.lookup("admin/system/admin") then %>
-						<div class="right"><a class="btn"
-								href="<%=url("admin/system/admin")%>"><%:Go to password configuration...%></a></div>
-						<% end %>
-					</div>
-					<%- end -%>
-
-					<noscript>
-						<div class="alert-message error">
-							<h4><%:JavaScript required!%></h4>
-							<p><%:You must enable JavaScript in your browser or LuCI will not work properly.%></p>
-						</div>
-					</noscript>
-
-					<div id="tabmenu" style="display:none"></div>
+    </script>
+    <!-- Video Player End -->
+    <% else %>
+    <!-- Image Background Start -->
+    <div class="main-bg" id="main-bg" style="background-image:url(<%=bgUrl%>)"></div>
+    <!-- Image Background End -->
+    <% end %>
+    <div class="main-left" id="mainmenu" style="display:none">
+      <div class="sidenav-header d-flex align-items-center">
+        <a class="brand" href="#">
+          <%=brand_name%></a>
+        <div class="ml-auto">
+          <!-- Sidenav toggler -->
+          <div class="sidenav-toggler d-none d-xl-block active" data-action="sidenav-unpin" data-target="#sidenav-main">
+            <div class="sidenav-toggler-inner">
+              <i class="sidenav-toggler-line"></i>
+              <i class="sidenav-toggler-line"></i>
+              <i class="sidenav-toggler-line"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="main-right">
+      <header class="bg-primary">
+        <div class="fill">
+          <div class="container">
+            <div class="flex1">
+              <a class="showSide"></a>
+              <a class="brand" href="#">
+                <%=brand_name%></a>
+            </div>
+            <div class="status" id="indicators"></div>
+          </div>
+        </div>
+      </header>
+      <div class="darkMask"></div>
+      <div id="maincontent">
+        <div class="container">
+          <%- if luci.sys.process.info("uid") == 0 and luci.sys.user.getuser("root") and not luci.sys.user.getpasswd("root") then -%>
+          <div class="alert-message error">
+            <h4>
+              <%:No password set!%>
+            </h4>
+            <p>
+              <%:There is no password set on this router. Please configure a root password to protect the web interface.%>
+            </p>
+            <% if disp.lookup("admin/system/admin") then %>
+            <div class="right"><a class="btn" href="<%=url(" admin/system/admin")%>"> <%:Go to password configuration...%></a></div>
+            <% end %>
+          </div>
+          <%- end -%>
+          <noscript>
+            <div class="alert-message error">
+              <h4>
+                <%:JavaScript required!%>
+              </h4>
+              <p>
+                <%:You must enable JavaScript in your browser or LuCI will not work properly.%>
+              </p>
+            </div>
+          </noscript>
+          <div id="tabmenu" style="display:none"></div>
